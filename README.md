@@ -16,3 +16,9 @@ The ELK stack
 ## go over this https://www.elastic.co/blog/running-elasticsearch-on-aws
 
 ## try opster!!
+
+
+## need to rewrite with having different scenarios as described in information:
+# 3 dedicated out the bat and dedicated datas
+# small cluster of master/ data of 3 nodes all in one
+# also need to diffrentiate between inital bootstrap cluster to dedicated masters joining after failure
