@@ -61,9 +61,9 @@ locals {
   )
 
   backup_masters_dns_records_list = var.is_data_node_master_eligible ? join(", ",
-    [for index in range(1, var.es_data_nodes_amount + 1) : "data${index}.${aws_route53_zone.elasticsearch_internal_zone.name}"]) : ""
+  [for index in range(1, var.es_data_nodes_amount + 1) : "data${index}.${aws_route53_zone.elasticsearch_internal_zone.name}"]) : ""
 
   discovery_seed_hosts = var.is_data_node_master_eligible ? format(
-    "${local.dedicated_masters_dns_records_list}, %s", local.backup_masters_dns_records_list) : local.dedicated_masters_dns_records_list
+  "${local.dedicated_masters_dns_records_list}, %s", local.backup_masters_dns_records_list) : local.dedicated_masters_dns_records_list
 
 }

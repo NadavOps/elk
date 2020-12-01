@@ -40,8 +40,8 @@ module "es_dedicated_master_nodes" {
     domain                     = aws_route53_zone.elasticsearch_internal_zone.name
     elasticsearch_version      = var.elasticsearch_version
     elasticsearch_cluster_name = var.elasticsearch_cluster_name
-    masters_dns_records = local.dedicated_masters_dns_records_list
-    discovery_seed_hosts = local.discovery_seed_hosts
+    masters_dns_records        = local.dedicated_masters_dns_records_list
+    discovery_seed_hosts       = local.discovery_seed_hosts
   }
 }
 ## Dedicated ES masters records
@@ -73,8 +73,8 @@ module "es_data_nodes" {
     domain                     = aws_route53_zone.elasticsearch_internal_zone.name
     elasticsearch_version      = var.elasticsearch_version
     elasticsearch_cluster_name = var.elasticsearch_cluster_name
-    masters_dns_records = local.dedicated_masters_dns_records_list
-    discovery_seed_hosts = local.discovery_seed_hosts
+    masters_dns_records        = local.dedicated_masters_dns_records_list
+    discovery_seed_hosts       = local.discovery_seed_hosts
     joining_node_roles = join(
       ", ", compact([each.value, var.is_data_node_master_eligible ? "master" : ""])
     )
