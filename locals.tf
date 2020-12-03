@@ -49,21 +49,16 @@ locals {
   }
 
   instance_types = {
+    initial_master_node   = "t3a.small"
     dedicated_master_node = "t3a.small"
-    data_node             = "t3a.medium"
+    data_master_node      = "t3a.small"
+    dedicated_data_node   = "t3a.medium"
   }
 
   root_block_device = [{ volume_size = 15 }]
 
-  dedicated_masters_dns_records_list = join(", ",
-    [for index in range(1, var.es_dedicated_master_nodes_amount + 1) :
-    "master${index}.${aws_route53_zone.elasticsearch_internal_zone.name}"]
+  initial_masters_dns_records_list = join(", ",
+    [for index in range(1, var.es_initial_master_nodes_amount + 1) :
+    "${var.elasticsearch_cluster_name}-initial_master${index}.${aws_route53_zone.elasticsearch_internal_zone.name}"]
   )
-
-  backup_masters_dns_records_list = var.is_data_node_master_eligible ? join(", ",
-  [for index in range(1, var.es_data_nodes_amount + 1) : "data${index}.${aws_route53_zone.elasticsearch_internal_zone.name}"]) : ""
-
-  discovery_seed_hosts = var.is_data_node_master_eligible ? format(
-  "${local.dedicated_masters_dns_records_list}, %s", local.backup_masters_dns_records_list) : local.dedicated_masters_dns_records_list
-
 }

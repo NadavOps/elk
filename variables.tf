@@ -1,3 +1,4 @@
+## Required
 variable "aws_provider_main_region" {
   description = "Region of deployment"
   type        = string
@@ -28,10 +29,18 @@ variable "ssh_ips" {
   type        = list(string)
 }
 
-variable "es_dedicated_master_nodes_amount" {
-  description = "The amount of dedicated masters to bootstrap the cluster with, changing this after deployment will destroy the cluster"
-  type        = number
-  default     = 3
+## Optional
+# miscellaneous
+variable "elasticsearch_cluster_name" {
+  description = "Elasticsearch cluster name"
+  type        = string
+  default     = "dev"
+}
+
+variable "instances_domain_name" {
+  description = "EC2 hostname suffix- domain name"
+  type        = string
+  default     = "elasticsearch"
 }
 
 variable "elasticsearch_version" {
@@ -39,27 +48,27 @@ variable "elasticsearch_version" {
   type        = string
   default     = "7.10.0"
 }
-
-variable "elasticsearch_cluster_name" {
-  description = "Elasticsearch cluster name"
-  type        = string
-  default     = "dev"
+# amount of node types
+variable "es_initial_master_nodes_amount" {
+  description = "The amount of dedicated masters to bootstrap the cluster with"
+  type        = number
+  default     = 3
 }
 
-variable "es_data_nodes_amount" {
-  description = "The amount of data nodes to deploy"
+variable "es_dedicated_master_nodes_amount" {
+  description = "The amount of dedicated masters to add to a running ES cluster"
+  type        = number
+  default     = 0
+}
+
+variable "es_data_master_nodes_amount" {
+  description = "The amount of nodes acting bot as data and master to add to a running ES cluster"
+  type        = number
+  default     = 0
+}
+
+variable "es_dedicated_data_nodes_amount" {
+  description = "The amount of dedicated data nodes to add to a running ES cluster"
   type        = number
   default     = 2
-}
-
-variable "is_data_node_master_eligible" {
-  description = "True will configre data nodes role as backup master"
-  type        = bool
-  default     = false
-}
-
-variable "instances_domain_name" {
-  description = "EC2 hostname suffix- domain name"
-  type        = string
-  default     = "elasticsearch"
 }

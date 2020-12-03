@@ -23,25 +23,63 @@ resource "aws_route53_zone" "elasticsearch_internal_zone" {
   }
 }
 
+#### Initial ES masters
+module "es_initial_master_nodes" {
+  source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
+  for_each               = { for index in range(1, var.es_initial_master_nodes_amount + 1) : index => "initial_master" }
+  ami                    = data.aws_ami.ubuntu_18_04.id
+  instance_type          = local.instance_types.initial_master_node
+  key_name               = var.aws_keypair
+  subnet_ids             = var.subnet_ids
+  vpc_security_group_ids = [module.security_groups["elasticsearch"].sg_id]
+  root_block_device      = local.root_block_device
+  iam_instance_profile   = aws_iam_instance_profile.profile.id
+  tags                   = { Name = "${each.value}${each.key}" }
+  user_data              = "./assets/user_data_scripts/es_initial_master_node.sh"
+  user_data_variables = {
+    es_cluster_name             = var.elasticsearch_cluster_name
+    es_node_description         = each.value
+    index                       = each.key
+    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    es_version                  = var.elasticsearch_version
+    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    node_roles                  = "master"
+    initial_masters_dns_records = local.initial_masters_dns_records_list
+  }
+}
+## Initial ES masters records
+resource "aws_route53_record" "es_initial_master_nodes" {
+  allow_overwrite = true
+  for_each        = module.es_initial_master_nodes
+  zone_id         = aws_route53_zone.elasticsearch_internal_zone.zone_id
+  name            = "${var.elasticsearch_cluster_name}-${each.value.ec2_tags.Name}"
+  type            = "A"
+  ttl             = "60"
+  records         = [each.value.ec2_private_ip]
+}
+
 #### Dedicated ES masters
 module "es_dedicated_master_nodes" {
   source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
-  for_each               = { for index in range(1, var.es_dedicated_master_nodes_amount + 1) : index => "master" }
+  for_each               = { for index in range(1, var.es_dedicated_master_nodes_amount + 1) : index => "dedicated_master" }
   ami                    = data.aws_ami.ubuntu_18_04.id
   instance_type          = local.instance_types.dedicated_master_node
   key_name               = var.aws_keypair
   subnet_ids             = var.subnet_ids
   vpc_security_group_ids = [module.security_groups["elasticsearch"].sg_id]
   root_block_device      = local.root_block_device
+  iam_instance_profile   = aws_iam_instance_profile.profile.id
   tags                   = { Name = "${each.value}${each.key}" }
-  user_data              = "./user_data_scripts/es_initial_master_node.sh"
+  user_data              = "./assets/user_data_scripts/es_initial_master_node.sh"
   user_data_variables = {
-    index                      = each.key
-    domain                     = aws_route53_zone.elasticsearch_internal_zone.name
-    elasticsearch_version      = var.elasticsearch_version
-    elasticsearch_cluster_name = var.elasticsearch_cluster_name
-    masters_dns_records        = local.dedicated_masters_dns_records_list
-    discovery_seed_hosts       = local.discovery_seed_hosts
+    es_cluster_name             = var.elasticsearch_cluster_name
+    es_node_description         = each.value
+    index                       = each.key
+    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    es_version                  = var.elasticsearch_version
+    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    node_roles                  = "master"
+    initial_masters_dns_records = ""
   }
 }
 ## Dedicated ES masters records
@@ -49,44 +87,117 @@ resource "aws_route53_record" "es_dedicated_master_node" {
   allow_overwrite = true
   for_each        = module.es_dedicated_master_nodes
   zone_id         = aws_route53_zone.elasticsearch_internal_zone.zone_id
-  name            = each.value.ec2_tags.Name
+  name            = "${var.elasticsearch_cluster_name}-${each.value.ec2_tags.Name}"
   type            = "A"
   ttl             = "60"
   records         = [each.value.ec2_private_ip]
 }
 
-#### ES data nodes, can be used as master backup
-module "es_data_nodes" {
+#### ES data-master nodes
+module "es_data_master_nodes" {
   source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
-  for_each               = { for index in range(1, var.es_data_nodes_amount + 1) : index => "data" }
+  for_each               = { for index in range(1, var.es_data_master_nodes_amount + 1) : index => "data-master" }
   ami                    = data.aws_ami.ubuntu_18_04.id
-  instance_type          = local.instance_types.data_node
+  instance_type          = local.instance_types.data_master_node
   key_name               = var.aws_keypair
   subnet_ids             = var.subnet_ids
   vpc_security_group_ids = [module.security_groups["elasticsearch"].sg_id]
   root_block_device      = local.root_block_device
+  iam_instance_profile   = aws_iam_instance_profile.profile.id
   tags                   = { Name = "${each.value}${each.key}" }
-  user_data              = "./user_data_scripts/es_joining_node.sh"
+  user_data              = "./assets/user_data_scripts/es_initial_master_node.sh"
   user_data_variables = {
-    index                      = each.key
-    es_node_main_role          = each.value
-    domain                     = aws_route53_zone.elasticsearch_internal_zone.name
-    elasticsearch_version      = var.elasticsearch_version
-    elasticsearch_cluster_name = var.elasticsearch_cluster_name
-    masters_dns_records        = local.dedicated_masters_dns_records_list
-    discovery_seed_hosts       = local.discovery_seed_hosts
-    joining_node_roles = join(
-      ", ", compact([each.value, var.is_data_node_master_eligible ? "master" : ""])
-    )
+    es_cluster_name             = var.elasticsearch_cluster_name
+    es_node_description         = each.value
+    index                       = each.key
+    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    es_version                  = var.elasticsearch_version
+    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    node_roles                  = "data, master"
+    initial_masters_dns_records = ""
   }
 }
-## Backup ES masters records (Data node primary role)
-resource "aws_route53_record" "es_data_backup_master_node" {
+## ES data-master records
+resource "aws_route53_record" "es_data_master_node" {
   allow_overwrite = true
-  for_each        = var.is_data_node_master_eligible ? module.es_data_nodes : {}
+  for_each        = module.es_data_master_nodes
   zone_id         = aws_route53_zone.elasticsearch_internal_zone.zone_id
-  name            = each.value.ec2_tags.Name
+  name            = "${var.elasticsearch_cluster_name}-${each.value.ec2_tags.Name}"
   type            = "A"
   ttl             = "60"
   records         = [each.value.ec2_private_ip]
 }
+
+#### ES dedicated data nodes
+module "es_dedicated_data_nodes" {
+  source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
+  for_each               = { for index in range(1, var.es_dedicated_data_nodes_amount + 1) : index => "data" }
+  ami                    = data.aws_ami.ubuntu_18_04.id
+  instance_type          = local.instance_types.dedicated_data_node
+  key_name               = var.aws_keypair
+  subnet_ids             = var.subnet_ids
+  vpc_security_group_ids = [module.security_groups["elasticsearch"].sg_id]
+  root_block_device      = local.root_block_device
+  iam_instance_profile   = aws_iam_instance_profile.profile.id
+  tags                   = { Name = "${each.value}${each.key}" }
+  user_data              = "./assets/user_data_scripts/es_initial_master_node.sh"
+  user_data_variables = {
+    es_cluster_name             = var.elasticsearch_cluster_name
+    es_node_description         = each.value
+    index                       = each.key
+    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    es_version                  = var.elasticsearch_version
+    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    node_roles                  = "data"
+    initial_masters_dns_records = ""
+  }
+}
+
+output "data-master" {
+  value = { for index in range(1, var.es_data_master_nodes_amount + 1) : index => "data-master" }
+}
+
+output "dedicated" {
+  value = { for index in range(1, var.es_dedicated_data_nodes_amount + 1) : index => "data" }
+}
+
+
+###### how to function this????
+### iam
+resource "aws_iam_role" "role" {
+  name                  = "elasticsearch-${var.elasticsearch_cluster_name}-ec2-role"
+  description           = "elasticsearch-${var.elasticsearch_cluster_name}-ec2-role"
+  force_detach_policies = true
+  assume_role_policy    = file("./assets/iam/ec2_role_trust_relationship.json")
+  path                  = "/elasticsearch-${var.elasticsearch_cluster_name}/"
+
+  #tags = local.general_tags
+}
+
+resource "aws_iam_instance_profile" "profile" {
+  name = aws_iam_role.role.name
+  role = aws_iam_role.role.name
+  path = "/elasticsearch-${var.elasticsearch_cluster_name}/"
+}
+
+resource "aws_iam_policy" "policy" {
+  name   = "elasticsearch-${var.elasticsearch_cluster_name}-route53"
+  policy = templatefile("./assets/iam/es_permissions_policy.json", { zone_id = aws_route53_zone.elasticsearch_internal_zone.id })
+  path   = "/elasticsearch-${var.elasticsearch_cluster_name}/"
+}
+
+resource "aws_iam_role_policy_attachment" "attachment" {
+  role       = aws_iam_role.role.name
+  policy_arn = aws_iam_policy.policy.arn
+}
+
+
+
+
+
+
+
+
+
+
+
