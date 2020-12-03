@@ -22,3 +22,16 @@ The ELK stack
 # 3 dedicated out the bat and dedicated datas
 # small cluster of master/ data of 3 nodes all in one
 # also need to diffrentiate between inital bootstrap cluster to dedicated masters joining after failure
+
+
+
+## do one template for dedicated master, master, data, data-master
+## add cluster prefix to names
+## validate clustering for all
+## it can be done if instead passing terraform variables of every new instance, but to tell the script to dig records from unchanged domain
+## need to add conditional for nodes that change the minimum master eligible for election
+
+
+## function dns making and iam role
+
+## fix master counting- doesnt work
