@@ -12,39 +12,40 @@ rm -rf elasticsearch-$elasticsearch_version-amd64.deb
 sudo /bin/systemctl daemon-reload
 sudo /bin/systemctl enable elasticsearch.service
 
-#### Query AWS internal zone and get 3 masters for ES discovery using file -> /etc/elasticsearch/unicast_hosts.txt
+#### Query AWS DNS periodically to find 3 masters for ES discovery using file -> /etc/elasticsearch/unicast_hosts.txt
 apt install -y awscli jq
-for interval in {1..6}
+cat << 'EOF' > /etc/elasticsearch/discovery.sh
+for interval in {1..18}
 do
-    count=0
     records_raw=$(aws route53 list-resource-record-sets --hosted-zone-id ${route53_es_zone_id} --query "ResourceRecordSets[?Type == 'A']")
-    records_names=$(echo $records_raw | jq -r .[].Name | rev | cut -c 2- | rev)
+    records_names=$(echo $records_raw | jq -r .[].Name | rev | cut -c 2- | rev | tr " " "\n" | sort -r)
     for record in $records_names
     do
-        echo $record
         cluster_name_prefix=$(echo $record | cut -d "-" -f1)
         node_name_suffix=$(echo $record | cut -d "-" -f2)
-        if [[ $cluster_name_prefix == ${es_cluster_name} && $node_name_suffix == *"master"* ]]
+        record_status=$(curl -s -o /dev/null -w "%%{http_code}" $record:9200)
+        if [[ $cluster_name_prefix == ${es_cluster_name} && $node_name_suffix == *"master"* && $record_status -eq 200 ]]
         then
-            count=$((count+1))
+            echo "Adding $record to /tmp/temp_unicast_hosts.txt"
+            echo $record >> /tmp/temp_unicast_hosts.txt
+            if [[ $(wc -l < /tmp/temp_unicast_hosts.txt) -gt 2 ]]; then break; fi
         fi
     done
-    if [[ $count -gt 2 ]]; then echo "found more than 2 masters"; break; fi
-    echo "didn't found more than 2 masters, sleeping 10, and retrying"
+    if [[ -f /tmp/temp_unicast_hosts.txt && $(wc -l < /tmp/temp_unicast_hosts.txt) -ge 1 ]]; then break; fi
+    echo "didn't found any masters. Attempt $interval/18, sleeping 10 and retrying"
     sleep 10
 done
 
-for record in $records_names
-do
-    cluster_name_prefix=$(echo $record | cut -d "-" -f1)
-    node_name_suffix=$(echo $record | cut -d "-" -f2)
-    if [[ $cluster_name_prefix == ${es_cluster_name} && $node_name_suffix == *"master"* ]]
-    then
-        echo "Adding $record to /etc/elasticsearch/unicast_hosts.txt"
-        echo $record >> /etc/elasticsearch/unicast_hosts.txt
-    fi
-    if [[ -f /etc/elasticsearch/unicast_hosts.txt && $(cat /etc/elasticsearch/unicast_hosts.txt | wc -l) -gt 2 ]]; then break; fi
-done
+if [[ -f /tmp/temp_unicast_hosts.txt ]]
+then
+    echo "Creating /etc/elasticsearch/unicast_hosts.txt and removing /tmp/temp_unicast_hosts.txt"
+    cat /tmp/temp_unicast_hosts.txt > /etc/elasticsearch/unicast_hosts.txt
+    rm -f /tmp/temp_unicast_hosts.txt
+fi
+EOF
+if [[ ${es_node_description} == *"initial"* ]]; then touch /etc/elasticsearch/unicast_hosts.txt; fi
+if [[ ${es_node_description} != *"initial"* ]]; then bash /etc/elasticsearch/discovery.sh; fi
+echo "0 */12 * * * bash /etc/elasticsearch/discovery.sh" | crontab -
 
 #### configuring jvm.options to 2g heapsize, saving elasticsearch.yml defaults configuration, configuring elastic.yml
 LOCAL_IPV4=$(curl "http://169.254.169.254/latest/meta-data/local-ipv4")
@@ -76,7 +77,7 @@ EOF
 ### Adding to elasticsearch the bootstrap configuration if it is a bootstrap run
 if [[ ${es_node_description} == *"initial"* ]]
 then
-    echo "The node is an initial bootstrap node, adding relevant configuration"
+    echo "The node is an initial bootstrap node, adding relevant configuration (initial_master_nodes)"
     echo "cluster.initial_master_nodes: [${initial_masters_dns_records}]" >> /etc/elasticsearch/elasticsearch.yml
 fi
 
@@ -90,22 +91,29 @@ for interval in {1..36}
 do
     es_running_nodes=$(curl -s localhost:9200/_cat/nodes | wc -l)
     if [[ $es_running_nodes -gt 1 ]]; then
-        echo "More than one node found ($es_running_nodes). assuming successful clustering, removing initial_master_nodes"
-        sed -i '/cluster.initial_master_nodes/d' /etc/elasticsearch/elasticsearch.yml
+        echo "More than one node found ($es_running_nodes). assuming successful clustering."
+        if [[ ${es_node_description} == *"initial"* ]]
+        then
+            echo "The node is an initial bootstrap node, removing relevant configuration (initial_master_nodes)"
+            sed -i '/cluster.initial_master_nodes/d' /etc/elasticsearch/elasticsearch.yml
+        fi
         break
     fi
-    echo "number of nodes: $es_running_nodes, clustering unsucessful, rechecking in 10 seconds"
+    echo "number of nodes: $es_running_nodes, clustering unsucessful. Attempt $interval/36, rechecking in 10 seconds"
     sleep 10
 done
 
-#### Sets dynamically the required number of master eligible nodes by the cluster for elections
+#### Sets dynamically the required number of master eligible nodes for the cluster elections
 #### The rule is N/2 + 1
 sleep 20
-
-# add for line in $(curl -s "localhost:9200/_cat/nodes?v&h=node.role")
-
-
-master_eligible_nodes=$(expr $(curl -s "localhost:9200/_cat/nodes?v&h=master" | wc -l) - 1)
+es_all_nodes_roles_raw=$(curl -s "localhost:9200/_cat/nodes?v&h=node.role")
+es_all_nodes_roles=$(echo $es_all_nodes_roles_raw | cut -d " " -f2-)
+echo "all node roles: $es_all_nodes_roles"
+for node_roles in $es_all_nodes_roles
+do
+    if [[ $node_roles == *"m"* ]]; then master_eligible_nodes=$((master_eligible_nodes+1)); fi
+done
+echo "Number of master eligible nodes: $master_eligible_nodes"
 let "required_master_eligible_nodes_for_elections = $master_eligible_nodes/2 + 1"
 curl -X PUT localhost:9200/_cluster/settings -H "Content-Type: application/json" -d'
 {
