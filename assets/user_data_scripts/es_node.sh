@@ -1,14 +1,35 @@
 #!/bin/bash
+#### Configure parameters unless arguments are passed
+if [[ -z $1 ]]
+then
+    es_cluster_name=${tf_es_cluster_name}
+    es_node_description=${tf_es_node_description}
+    index=${tf_index}
+    domain=${tf_domain}
+    es_version=${tf_es_version}
+    route53_es_zone_id=${tf_route53_es_zone_id}
+    node_roles=${tf_node_roles}
+    initial_masters_dns_records=${tf_initial_masters_dns_records}
+else
+    es_cluster_name=$1
+    es_node_description=$2
+    index=$3
+    domain=$4
+    es_version=$5
+    route53_es_zone_id=$6
+    node_roles=$7
+    initial_masters_dns_records=$8
+fi
+
 #### changing hostname
-hostnamectl set-hostname ${es_cluster_name}-${es_node_description}${index}.${domain}
+hostnamectl set-hostname $es_cluster_name-$es_node_description$index.$domain
 
 #### installing java, installing elasticsearch and registering it to systemd
 sudo apt update -y
 sudo apt install openjdk-11-jdk -y
-elasticsearch_version=${es_version}
-curl -L -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$elasticsearch_version-amd64.deb
-sudo dpkg -i elasticsearch-$elasticsearch_version-amd64.deb
-rm -rf elasticsearch-$elasticsearch_version-amd64.deb
+curl -L -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$es_version-amd64.deb
+sudo dpkg -i elasticsearch-$es_version-amd64.deb
+rm -rf elasticsearch-$es_version-amd64.deb
 sudo /bin/systemctl daemon-reload
 sudo /bin/systemctl enable elasticsearch.service
 
@@ -17,14 +38,14 @@ apt install -y awscli jq
 cat << 'EOF' > /etc/elasticsearch/discovery.sh
 for interval in {1..18}
 do
-    records_raw=$(aws route53 list-resource-record-sets --hosted-zone-id ${route53_es_zone_id} --query "ResourceRecordSets[?Type == 'A']")
+    records_raw=$(aws route53 list-resource-record-sets --hosted-zone-id $route53_es_zone_id --query "ResourceRecordSets[?Type == 'A']")
     records_names=$(echo $records_raw | jq -r .[].Name | rev | cut -c 2- | rev | tr " " "\n" | sort -r)
     for record in $records_names
     do
         cluster_name_prefix=$(echo $record | cut -d "-" -f1)
         node_name_suffix=$(echo $record | cut -d "-" -f2)
         record_status=$(curl -s -o /dev/null -w "%%{http_code}" $record:9200)
-        if [[ $cluster_name_prefix == ${es_cluster_name} && $node_name_suffix == *"master"* && $record_status -eq 200 ]]
+        if [[ $cluster_name_prefix == $es_cluster_name && $node_name_suffix == *"master"* && $record_status -eq 200 ]]
         then
             echo "Adding $record to /tmp/temp_unicast_hosts.txt"
             echo $record >> /tmp/temp_unicast_hosts.txt
@@ -43,8 +64,8 @@ then
     rm -f /tmp/temp_unicast_hosts.txt
 fi
 EOF
-if [[ ${es_node_description} == *"initial"* ]]; then touch /etc/elasticsearch/unicast_hosts.txt; fi
-if [[ ${es_node_description} != *"initial"* ]]; then bash /etc/elasticsearch/discovery.sh; fi
+if [[ $es_node_description == *"initial"* ]]; then touch /etc/elasticsearch/unicast_hosts.txt; fi
+if [[ $es_node_description != *"initial"* ]]; then bash /etc/elasticsearch/discovery.sh; fi
 echo "0 */12 * * * bash /etc/elasticsearch/discovery.sh" | crontab -
 
 #### configuring jvm.options to 2g heapsize, saving elasticsearch.yml defaults configuration, configuring elastic.yml
@@ -55,12 +76,12 @@ cp /etc/elasticsearch/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml.unu
 
 cat << EOF > /etc/elasticsearch/elasticsearch.yml
 ## Cluster
-cluster.name: ${es_cluster_name}
+cluster.name: $es_cluster_name
 
 ## Node
-node.name: ${es_cluster_name}-${es_node_description}${index}.${domain}
+node.name: $es_cluster_name-$es_node_description$index.$domain
 
-node.roles: [ ${node_roles} ]
+node.roles: [ $node_roles ]
 # Add custom attributes to the node, for example: node.attr.rack: r1
 
 ## Paths, changing the defaults so reinstallation will not overwrite data
@@ -75,10 +96,10 @@ discovery.seed_providers: file
 EOF
 
 ### Adding to elasticsearch the bootstrap configuration if it is a bootstrap run
-if [[ ${es_node_description} == *"initial"* ]]
+if [[ $es_node_description == *"initial"* ]]
 then
     echo "The node is an initial bootstrap node, adding relevant configuration (initial_master_nodes)"
-    echo "cluster.initial_master_nodes: [${initial_masters_dns_records}]" >> /etc/elasticsearch/elasticsearch.yml
+    echo "cluster.initial_master_nodes: [$initial_masters_dns_records]" >> /etc/elasticsearch/elasticsearch.yml
 fi
 
 #### Verify elasticsearch user have the permissions, and starting elasticsearch
@@ -92,7 +113,7 @@ do
     es_running_nodes=$(curl -s localhost:9200/_cat/nodes | wc -l)
     if [[ $es_running_nodes -gt 1 ]]; then
         echo "More than one node found ($es_running_nodes). assuming successful clustering."
-        if [[ ${es_node_description} == *"initial"* ]]
+        if [[ $es_node_description == *"initial"* ]]
         then
             echo "The node is an initial bootstrap node, removing relevant configuration (initial_master_nodes)"
             sed -i '/cluster.initial_master_nodes/d' /etc/elasticsearch/elasticsearch.yml

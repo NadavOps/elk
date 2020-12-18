@@ -37,14 +37,14 @@ module "es_initial_master_nodes" {
   tags                   = { Name = "${each.value}${each.key + 1}" }
   user_data              = "./assets/user_data_scripts/es_node.sh"
   user_data_variables = {
-    es_cluster_name             = var.elasticsearch_cluster_name
-    es_node_description         = each.value
-    index                       = each.key + 1
-    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
-    es_version                  = var.elasticsearch_version
-    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
-    node_roles                  = "master"
-    initial_masters_dns_records = local.initial_masters_dns_records_list
+    tf_es_cluster_name             = var.elasticsearch_cluster_name
+    tf_es_node_description         = each.value
+    tf_index                       = each.key + 1
+    tf_domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    tf_es_version                  = var.elasticsearch_version
+    tf_route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    tf_node_roles                  = "master"
+    tf_initial_masters_dns_records = local.initial_masters_dns_records_list
   }
 }
 ## Initial ES masters records
@@ -72,14 +72,14 @@ module "es_dedicated_master_nodes" {
   tags                   = { Name = "${each.value}${each.key + 1}" }
   user_data              = "./assets/user_data_scripts/es_node.sh"
   user_data_variables = {
-    es_cluster_name             = var.elasticsearch_cluster_name
-    es_node_description         = each.value
-    index                       = each.key + 1
-    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
-    es_version                  = var.elasticsearch_version
-    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
-    node_roles                  = "master"
-    initial_masters_dns_records = ""
+    tf_es_cluster_name             = var.elasticsearch_cluster_name
+    tf_es_node_description         = each.value
+    tf_index                       = each.key + 1
+    tf_domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    tf_es_version                  = var.elasticsearch_version
+    tf_route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    tf_node_roles                  = "master"
+    tf_initial_masters_dns_records = ""
   }
 }
 ## Dedicated ES masters records
@@ -107,14 +107,14 @@ module "es_data_master_nodes" {
   tags                   = { Name = "${each.value}${each.key + 1}" }
   user_data              = "./assets/user_data_scripts/es_node.sh"
   user_data_variables = {
-    es_cluster_name             = var.elasticsearch_cluster_name
-    es_node_description         = each.value
-    index                       = each.key + 1
-    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
-    es_version                  = var.elasticsearch_version
-    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
-    node_roles                  = "data, master"
-    initial_masters_dns_records = ""
+    tf_es_cluster_name             = var.elasticsearch_cluster_name
+    tf_es_node_description         = each.value
+    tf_index                       = each.key + 1
+    tf_domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    tf_es_version                  = var.elasticsearch_version
+    tf_route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    tf_node_roles                  = "data, master"
+    tf_initial_masters_dns_records = ""
   }
 }
 ## ES data-master records
@@ -142,14 +142,14 @@ module "es_dedicated_data_nodes" {
   tags                   = { Name = "${each.value}${each.key + 1}" }
   user_data              = "./assets/user_data_scripts/es_node.sh"
   user_data_variables = {
-    es_cluster_name             = var.elasticsearch_cluster_name
-    es_node_description         = each.value
-    index                       = each.key + 1
-    domain                      = aws_route53_zone.elasticsearch_internal_zone.name
-    es_version                  = var.elasticsearch_version
-    route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
-    node_roles                  = "data"
-    initial_masters_dns_records = ""
+    tf_es_cluster_name             = var.elasticsearch_cluster_name
+    tf_tf_es_node_description         = each.value
+    tf_index                       = each.key + 1
+    tf_domain                      = aws_route53_zone.elasticsearch_internal_zone.name
+    tf_es_version                  = var.elasticsearch_version
+    tf_route53_es_zone_id          = aws_route53_zone.elasticsearch_internal_zone.id
+    tf_node_roles                  = "data"
+    tf_initial_masters_dns_records = ""
   }
 }
 
