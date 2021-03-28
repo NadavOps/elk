@@ -25,7 +25,7 @@ resource "aws_route53_zone" "elasticsearch_internal_zone" {
 
 #### Initial ES masters
 module "es_initial_master_nodes" {
-  source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
+  source                 = "git@github.com:NadavOps/terraform.git//aws/ec2"
   for_each               = { for index in range(0, var.es_initial_master_nodes_amount) : index => "initial_master" }
   ami                    = data.aws_ami.ubuntu_18_04.id
   instance_type          = local.instance_types.initial_master_node
@@ -60,7 +60,7 @@ resource "aws_route53_record" "es_initial_master_nodes" {
 
 #### Dedicated ES masters
 module "es_dedicated_master_nodes" {
-  source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
+  source                 = "git@github.com:NadavOps/terraform.git//aws/ec2"
   for_each               = { for index in range(0, var.es_dedicated_master_nodes_amount) : index => "dedicated_master" }
   ami                    = data.aws_ami.ubuntu_18_04.id
   instance_type          = local.instance_types.dedicated_master_node
@@ -95,7 +95,7 @@ resource "aws_route53_record" "es_dedicated_master_node" {
 
 #### ES data-master nodes
 module "es_data_master_nodes" {
-  source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
+  source                 = "git@github.com:NadavOps/terraform.git//aws/ec2"
   for_each               = { for index in range(0, var.es_data_master_nodes_amount) : index => "data_master" }
   ami                    = data.aws_ami.ubuntu_18_04.id
   instance_type          = local.instance_types.data_master_node
@@ -130,7 +130,7 @@ resource "aws_route53_record" "es_data_master_node" {
 
 #### ES dedicated data nodes
 module "es_dedicated_data_nodes" {
-  source                 = "git@github.com:NadavOps/terraform.git//aws/compute/ec2-instance"
+  source                 = "git@github.com:NadavOps/terraform.git//aws/ec2"
   for_each               = { for index in range(0, var.es_dedicated_data_nodes_amount) : index => "data" }
   ami                    = data.aws_ami.ubuntu_18_04.id
   instance_type          = local.instance_types.dedicated_data_node
